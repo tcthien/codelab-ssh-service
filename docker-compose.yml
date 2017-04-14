@@ -1,0 +1,14 @@
+version: '2'
+services:
+  codelab-ssh-mongodb:
+    environment:
+      CODELAB_USER: $CODELAB_USER
+      CODELAB_PASS: $CODELAB_PASS
+    build: mongodb
+    ports:
+      - 20181:27017
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "10"
