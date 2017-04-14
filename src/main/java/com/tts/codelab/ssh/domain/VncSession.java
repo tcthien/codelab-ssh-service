@@ -1,11 +1,10 @@
-package com.tts.codelab.account.domain;
+package com.tts.codelab.ssh.domain;
 
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
-import org.hibernate.validator.constraints.Length;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -35,5 +34,6 @@ public class VncSession {
     @NotNull
     private int vncSessionId;
 
+    @Builder.Default
     private Date upTime = new Date();
 }

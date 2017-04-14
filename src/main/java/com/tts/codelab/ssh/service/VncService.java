@@ -1,8 +1,7 @@
-package com.tts.codelab.account.service;
+package com.tts.codelab.ssh.service;
 
-import com.tts.codelab.account.domain.UserVncSession;
-import com.tts.codelab.account.domain.VncSession;
-import com.tts.codelab.account.domain.VncSessionSummary;
+import com.tts.codelab.ssh.domain.UserVncSession;
+import com.tts.codelab.ssh.domain.VncSessionSummary;
 
 public interface VncService {
     UserVncSession findBySessionId(String sessionId);

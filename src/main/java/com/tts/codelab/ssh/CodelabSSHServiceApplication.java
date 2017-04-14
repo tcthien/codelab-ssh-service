@@ -1,4 +1,4 @@
-package com.tts.codelab.account;
+package com.tts.codelab.ssh;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

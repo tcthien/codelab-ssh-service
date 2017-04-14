@@ -1,8 +1,8 @@
-package com.tts.codelab.account.controller;
+package com.tts.codelab.ssh.controller;
 
-import com.tts.codelab.account.domain.UserVncSession;
-import com.tts.codelab.account.domain.VncSessionSummary;
-import com.tts.codelab.account.service.VncService;
+import com.tts.codelab.ssh.domain.UserVncSession;
+import com.tts.codelab.ssh.domain.VncSessionSummary;
+import com.tts.codelab.ssh.service.VncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
