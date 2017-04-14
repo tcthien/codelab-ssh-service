@@ -28,10 +28,10 @@ import feign.RequestInterceptor;
 @EnableConfigurationProperties
 @Configuration
 @EnableGlobalMethodSecurity(prePostEnabled = true)
-public class CodelabAccountServiceApplication extends ResourceServerConfigurerAdapter {
+public class CodelabSSHServiceApplication extends ResourceServerConfigurerAdapter {
 
     public static void main(String[] args) {
-        SpringApplication.run(CodelabAccountServiceApplication.class, args);
+        SpringApplication.run(CodelabSSHServiceApplication.class, args);
     }
 
     @Override
