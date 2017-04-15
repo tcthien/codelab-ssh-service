@@ -24,5 +24,6 @@ public class UserVncSession {
     @NotNull
     private String description;
 
+    @Builder.Default
     private Date upTime = new Date();
 }

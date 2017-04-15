@@ -1,7 +1,9 @@
 package com.tts.codelab.ssh.service;
 
 import com.tts.codelab.ssh.domain.SSHServer;
+import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -18,12 +20,23 @@ public class SSHServerServiceImpl implements SSHServerService {
 
     private Set<SSHServer> sshServers = new HashSet<>();
 
+    @Autowired
+    private SSHCommandExecutor sshCommandExecutor;
+
     @PostConstruct
     public void initialize() {
         if (sshServerConfigurations != null && !sshServerConfigurations.isEmpty()) {
             sshServerConfigurations.forEach(sshServer -> {
                 String[] arr = sshServer.split(",");
-                sshServers.add(SSHServer.builder().serverIp(arr[0]).userName(arr[1]).password(arr[2]).build());
+                String serverIp = null;
+                int port = 22;
+                int idx = arr[0].indexOf(":");
+                if (idx >= 0) {
+                    String[] tmp = arr[0].split("\\:");
+                    serverIp = tmp[0];
+                    port = Integer.parseInt(tmp[1]);
+                }
+                sshServers.add(SSHServer.builder().serverIp(serverIp).port(port).userName(arr[1]).password(arr[2]).build());
             });
         }
     }

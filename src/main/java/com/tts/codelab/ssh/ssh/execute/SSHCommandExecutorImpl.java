@@ -17,18 +17,26 @@ import java.util.List;
 @Service
 @Slf4j
 public class SSHCommandExecutorImpl implements SSHCommandExecutor {
-    
+
     @Autowired
     SSHConsoleLog consoleLog;
-    
+
+    @Override
     public SSHResult execute(String ipAddress, String userName, String password, Command cmd) throws Exception {
         return execute(ipAddress, userName, password, cmd, null);
     }
 
+    @Override
     public SSHResult execute(String ipAddress, String userName, String password, Command cmd, SSHCommandCallback callback)
             throws Exception {
+        return execute(ipAddress, 22, userName, password, cmd, callback);
+    }
+
+    @Override
+    public SSHResult execute(String ipAddress, int port, String userName, String password, Command cmd, SSHCommandCallback callback)
+            throws Exception {
         SSHResult sshResult = null;
-        
+
         List<Command> cmds = null;
         if (cmd instanceof CompositeCommand) {
             cmds = new ArrayList<>(((CompositeCommand) cmd).getSubCommands());
@@ -42,7 +50,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
             java.util.Properties config = new java.util.Properties();
             config.put("StrictHostKeyChecking", "no");
             JSch jsch = new JSch();
-            session = jsch.getSession(userName, ipAddress, 22);
+            session = jsch.getSession(userName, ipAddress, port);
             session.setPassword(password);
             session.setConfig(config);
             session.connect();
@@ -51,7 +59,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
                 if (callback == null || (callback != null && callback.preExecute(sshCommand))) {
                     sshResult = executeCommand(ipAddress, session, sshCommand);
                 }
-                
+
                 if (callback != null && !callback.postExecute(sshCommand)) {
                     // callback.postExecute returns false => don't execute further
                     break;
@@ -85,7 +93,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
             channel.connect();
             byte[] tmp = new byte[1024];
             StringBuilder sb = new StringBuilder();
-            
+
             int time = 0;
             while (true) {
                 while (in.available() > 0) {
@@ -118,7 +126,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
         }
         return sshResult;
     }
-    
+
     @Override
     public String getLog(String ipAddress) {
         return consoleLog.getLog(ipAddress);

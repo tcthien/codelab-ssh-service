@@ -15,6 +15,8 @@ public class SSHServer {
 
     private String serverIp;
 
+    private int port;
+
     private String userName;
 
     private String password;
