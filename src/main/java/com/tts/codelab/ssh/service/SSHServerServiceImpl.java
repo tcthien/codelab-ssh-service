@@ -5,17 +5,21 @@ import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Slf4j
 public class SSHServerServiceImpl implements SSHServerService {
-    @Value("${codelab.config.sshServer}")
+
+    public static final String CODELAB_CONFIG_SSH_SERVER = "codelab.config.sshServer";
+    @Autowired
+    private Environment env;
+
+    @Value("${codelab.config.servers}")
     private List<String> sshServerConfigurations;
 
     private Set<SSHServer> sshServers = new HashSet<>();
@@ -26,17 +30,22 @@ public class SSHServerServiceImpl implements SSHServerService {
     @PostConstruct
     public void initialize() {
         if (sshServerConfigurations != null && !sshServerConfigurations.isEmpty()) {
-            sshServerConfigurations.forEach(sshServer -> {
-                String[] arr = sshServer.split(",");
-                String serverIp = null;
-                int port = 22;
-                int idx = arr[0].indexOf(":");
-                if (idx >= 0) {
-                    String[] tmp = arr[0].split("\\:");
-                    serverIp = tmp[0];
-                    port = Integer.parseInt(tmp[1]);
-                }
-                sshServers.add(SSHServer.builder().serverIp(serverIp).port(port).userName(arr[1]).password(arr[2]).build());
+            sshServerConfigurations.forEach(serverName -> {
+                String serverIp = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + ".ip");
+                String port = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + ".port");
+                String userName = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + ".userName");
+                String password = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + ".password");
+                String vagrantRoot = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + ".vagrantRoot");
+                List<String> vagrantSubFolder = env.getProperty(CODELAB_CONFIG_SSH_SERVER + "." + serverName + "" +
+                        ".vagrantSubFolder", List.class);
+                Map<String, Integer> vagrantSubMap = new HashMap<>();
+                vagrantSubFolder.forEach(subFolder -> {
+                    String[] arr = subFolder.split("\\:");
+                    vagrantSubMap.put(arr[0], Integer.valueOf(arr[1]));
+                });
+
+                sshServers.add(SSHServer.builder().serverIp(serverIp).port(Integer.valueOf(port)).userName(userName)
+                        .password(password).vagrantRootFolder(vagrantRoot).vagrantSubFolder(vagrantSubMap).build());
             });
         }
     }

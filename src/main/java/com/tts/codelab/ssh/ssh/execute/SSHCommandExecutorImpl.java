@@ -80,7 +80,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
     }
 
     protected SSHResult executeCommand(String host, Session session, Command sshCommand) throws JSchException, IOException {
-        System.out.println("Execute Command: " + sshCommand.getTextCommand());
+        log.info("Execute Command: " + sshCommand.getTextCommand());
         SSHResult sshResult = new SSHResult();
 
         Channel channel = session.openChannel("exec");
@@ -101,7 +101,7 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
                     if (i < 0)
                         break;
                     String outputConsole = new String(tmp, 0, i);
-                    System.out.println(outputConsole);
+                    log.info(outputConsole);
                     sb.append(outputConsole);
                     consoleLog.log(host, outputConsole);
                 }
