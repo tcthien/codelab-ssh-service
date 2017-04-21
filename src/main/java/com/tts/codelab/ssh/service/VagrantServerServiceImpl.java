@@ -49,4 +49,14 @@ public class VagrantServerServiceImpl implements VagrantServerService {
             });
         }
     }
+
+    @Override
+    public List<VagrantServer> getAvailableVagrantServer() {
+        return null;
+    }
+
+    @Override
+    public VagrantServer getVagrantServer(String serverIp) {
+        return null;
+    }
 }

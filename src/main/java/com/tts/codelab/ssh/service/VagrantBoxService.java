@@ -9,5 +9,5 @@ import com.tts.codelab.ssh.exception.UnavailableVagrantServerException;
 public interface VagrantBoxService {
     public VagrantBoxSession provision(String owner, String boxName, int ram) throws Exception;
 
-    public void destroy(String sessionId);
+    public void destroy(String sessionId) throws Exception;
 }

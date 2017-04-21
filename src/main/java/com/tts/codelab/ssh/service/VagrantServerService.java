@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface VagrantServerService {
     List<VagrantServer> getAvailableVagrantServer();
+
+    VagrantServer getVagrantServer(String serverIp);
 }

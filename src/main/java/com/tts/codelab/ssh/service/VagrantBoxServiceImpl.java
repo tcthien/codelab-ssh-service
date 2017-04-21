@@ -5,10 +5,7 @@ import com.tts.codelab.ssh.domain.VagrantServer;
 import com.tts.codelab.ssh.exception.UnavailableVagrantServerException;
 import com.tts.codelab.ssh.repository.VagrantBoxSessionRepository;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
-import com.tts.codelab.ssh.ssh.vagrant.ChangePasswordCommand;
-import com.tts.codelab.ssh.ssh.vagrant.ChangeVNCPasswordCommand;
-import com.tts.codelab.ssh.ssh.vagrant.StartVNCCommand;
-import com.tts.codelab.ssh.ssh.vagrant.VagrantUpCommand;
+import com.tts.codelab.ssh.ssh.vagrant.*;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
@@ -87,26 +84,27 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             vagrantSSHPass.append(sessionId.charAt(i));
         }
 
+        VagrantServer vagrantServer = vagrantSubInfo.getVagrantServer();
         VagrantBoxSession session = VagrantBoxSession.builder().sessionId(sessionId).boxName(boxName).memory(memory)
-                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(vagrantSubInfo.getVagrantServer()
+                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(vagrantServer
                         .getServerIp())
                 .vagrantSubFolder(vagrantSubInfo.getVagrantSubFolder())
                 .build();
 
-        // Put to map
-        vagrantBoxBySessionId.put(sessionId, session);
-        addVagrantSessionToServerIpMap(session);
 
         log.info("Provisioning session " + sessionId);
         log.debug("    " + session);
+        // Put to map
+        vagrantBoxBySessionId.put(sessionId, session);
+        addVagrantSessionToServerIpMap(session);
         // Save to database
         repository.save(session);
 
         // variable for SSH executing
-        String host = vagrantSubInfo.getVagrantServer().getServerIp();
-        int serverSSHPort = vagrantSubInfo.getVagrantServer().getPort();
-        String userName = vagrantSubInfo.getVagrantServer().getUserName();
-        String password = vagrantSubInfo.getVagrantServer().getPassword();
+        String host = vagrantServer.getServerIp();
+        int serverSSHPort = vagrantServer.getPort();
+        String userName = vagrantServer.getUserName();
+        String password = vagrantServer.getPassword();
 
         String vagrantUser = "vagrant";
 
@@ -127,8 +125,28 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     }
 
     @Override
-    public void destroy(String sessionId) {
+    public void destroy(String sessionId) throws Exception {
+        VagrantBoxSession session = vagrantBoxBySessionId.get(sessionId);
+        if (session == null) {
+            return;
+        }
 
+        VagrantServer vagrantServer = vagrantServerService.getVagrantServer(session.getServerIp());
+        // variable for SSH executing
+        String host = vagrantServer.getServerIp();
+        int serverSSHPort = vagrantServer.getPort();
+        String userName = vagrantServer.getUserName();
+        String password = vagrantServer.getPassword();
+
+        // Start Vagrant Session on Server
+        new VagrantDestroyCommand(session.getVagrantSubFolder()).execute(executor,
+                host, serverSSHPort, userName, password); // Usually is 22
+
+        // Remove out of the map
+        vagrantBoxBySessionId.remove(sessionId);
+        removeVagrantSessionToServerIpMap(host, sessionId);
+        // Delete in database
+        repository.delete(sessionId);
     }
 
     @Builder
@@ -186,6 +204,21 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
 
         }
         return vagrantSubInfo;
+    }
+
+    private void removeVagrantSessionToServerIpMap(String serverIp, String sessionId) {
+        Set<VagrantBoxSession> sessions = vagrantBoxByServerIp.get(serverIp);
+        if (sessions == null || sessions.isEmpty()) {
+            return;
+        }
+        Iterator<VagrantBoxSession> iter = sessions.iterator();
+        while (iter.hasNext()) {
+            VagrantBoxSession session = iter.next();
+            if (sessionId.equals(session.getSessionId())) {
+                iter.remove();
+                break;
+            }
+        }
     }
 
     private void addVagrantSessionToServerIpMap(VagrantBoxSession vagrantSession) {
