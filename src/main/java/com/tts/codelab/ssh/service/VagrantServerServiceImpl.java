@@ -1,6 +1,6 @@
 package com.tts.codelab.ssh.service;
 
-import com.tts.codelab.ssh.domain.SSHServer;
+import com.tts.codelab.ssh.domain.VagrantServer;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +13,7 @@ import java.util.*;
 
 @Service
 @Slf4j
-public class SSHServerServiceImpl implements SSHServerService {
+public class VagrantServerServiceImpl implements VagrantServerService {
 
     public static final String CODELAB_CONFIG_SSH_SERVER = "codelab.config.sshServer";
     @Autowired
@@ -22,7 +22,7 @@ public class SSHServerServiceImpl implements SSHServerService {
     @Value("${codelab.config.servers}")
     private List<String> sshServerConfigurations;
 
-    private Set<SSHServer> sshServers = new HashSet<>();
+    private Set<VagrantServer> vagrantServers = new HashSet<>();
 
     @Autowired
     private SSHCommandExecutor sshCommandExecutor;
@@ -44,7 +44,7 @@ public class SSHServerServiceImpl implements SSHServerService {
                     vagrantSubMap.put(arr[0], Integer.valueOf(arr[1]));
                 });
 
-                sshServers.add(SSHServer.builder().serverIp(serverIp).port(Integer.valueOf(port)).userName(userName)
+                vagrantServers.add(VagrantServer.builder().serverIp(serverIp).port(Integer.valueOf(port)).userName(userName)
                         .password(password).vagrantRootFolder(vagrantRoot).vagrantSubFolder(vagrantSubMap).build());
             });
         }

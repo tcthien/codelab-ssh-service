@@ -33,6 +33,12 @@ public class SSHCommandExecutorImpl implements SSHCommandExecutor {
     }
 
     @Override
+    public SSHResult execute(String ipAddress, int port, String userName, String password, Command cmd)
+            throws Exception {
+        return execute(ipAddress, port, userName, password, cmd, null);
+    }
+
+    @Override
     public SSHResult execute(String ipAddress, int port, String userName, String password, Command cmd, SSHCommandCallback callback)
             throws Exception {
         SSHResult sshResult = null;

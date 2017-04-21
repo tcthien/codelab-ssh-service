@@ -1,7 +1,7 @@
 package com.tts.codelab.ssh.ssh.domain;
 
 
-import com.tts.codelab.ssh.domain.SSHServer;
+import com.tts.codelab.ssh.domain.VagrantServer;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ public abstract class CompositeCommand implements Command {
     }
     
     @Override
-    public SSHResult execute(SSHCommandExecutor executor, SSHServer server) throws Exception {
+    public SSHResult execute(SSHCommandExecutor executor, VagrantServer server) throws Exception {
         return executor.execute(server.getServerIp(), server.getUserName(), server.getPassword(), this);
     }
 }

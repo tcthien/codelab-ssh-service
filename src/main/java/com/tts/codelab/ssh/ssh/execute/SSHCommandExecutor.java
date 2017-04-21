@@ -9,6 +9,8 @@ public interface SSHCommandExecutor {
 
     SSHResult execute(String host, String userName, String password, Command cmd, SSHCommandCallback callback) throws Exception;
 
+    SSHResult execute(String host, int port, String userName, String password, Command cmd) throws Exception;
+
     SSHResult execute(String host, int port, String userName, String password, Command cmd, SSHCommandCallback callback) throws Exception;
 
     String getLog(String ipAddress);

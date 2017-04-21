@@ -1,7 +1,7 @@
 package com.tts.codelab.ssh.ssh.domain;
 
 
-import com.tts.codelab.ssh.domain.SSHServer;
+import com.tts.codelab.ssh.domain.VagrantServer;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 
 public interface Command {
@@ -11,9 +11,7 @@ public interface Command {
     
     /**
      * Execute command on specific server
-     * @param executor
-     * @param server
      * @return
      */
-    SSHResult execute(SSHCommandExecutor executor, SSHServer server) throws Exception;
+    SSHResult execute(SSHCommandExecutor executor, String host, int port, String userName, String password) throws Exception;
 }

@@ -43,4 +43,10 @@ public class VagrantBoxSession {
 
     @Builder.Default
     private Date provisionDate = new Date();
+
+    @NotNull
+    private String serverIp;
+
+    @NotNull
+    private String vagrantSubFolder;
 }

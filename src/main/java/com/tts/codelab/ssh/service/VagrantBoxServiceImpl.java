@@ -1,44 +1,195 @@
 package com.tts.codelab.ssh.service;
 
 import com.tts.codelab.ssh.domain.VagrantBoxSession;
+import com.tts.codelab.ssh.domain.VagrantServer;
+import com.tts.codelab.ssh.exception.UnavailableVagrantServerException;
 import com.tts.codelab.ssh.repository.VagrantBoxSessionRepository;
+import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
+import com.tts.codelab.ssh.ssh.vagrant.ChangePasswordCommand;
+import com.tts.codelab.ssh.ssh.vagrant.ChangeVNCPasswordCommand;
+import com.tts.codelab.ssh.ssh.vagrant.StartVNCCommand;
+import com.tts.codelab.ssh.ssh.vagrant.VagrantUpCommand;
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
 public class VagrantBoxServiceImpl implements VagrantBoxService {
 
+    public static final int VAGRANT_BOX_BASE_PORT = 30000;
     @Autowired
-    private SSHServerService sshServerService;
+    private VagrantServerService vagrantServerService;
 
     @Autowired
     private VagrantBoxSessionRepository repository;
 
-    private Map<String, VagrantBoxSession> vagrantBoxSessions = new ConcurrentHashMap<>();
-    
+    @Autowired
+    private SSHCommandExecutor executor;
+
+    // Map<Session ID, Vagrant Box Session>
+    private Map<String, VagrantBoxSession> vagrantBoxBySessionId = new ConcurrentHashMap<>();
+
+    // Map<Server IP, Vagrant Box Session>
+    private Map<String, Set<VagrantBoxSession>> vagrantBoxByServerIp = new ConcurrentHashMap<>();
+
     @PostConstruct
-    public void initialize(){
+    public void initialize() {
         // Loading current provisioned vagrant box session from database. Which is for the case that
         //      we reboot application but vagrant box sessions are still there.
         repository.findAll().forEach(vagrantSession -> {
-            vagrantBoxSessions.put(vagrantSession.getSessionId(), vagrantSession);
+            vagrantBoxBySessionId.put(vagrantSession.getSessionId(), vagrantSession);
+            addVagrantSessionToServerIpMap(vagrantSession);
         });
     }
 
+    /**
+     * At the moment, there are two important ports: SSH (22) & VNC (5901) and one server may server many vagrant
+     * box sessions, so the idea is we will define port forwarding (from host to vagrant box) with following rules:
+     * - 30000: This is base port for vagrant session
+     * - For every vagrant session, we will base on id to generate port forwarding.
+     * For example with id=1
+     * + SSH Port: 30000 + (1 * 100) + 22 = 30122
+     * + VNC Port: 30000 + (1 * 100) + 1 = 30101   // 1 here is VNC Session ID
+     * <p>
+     * For example with id=2
+     * + SSH Port: 30000 + (2 * 100) + 22 = 30222
+     * + VNC Port: 30000 + (2 * 100) + 1 = 30201   // 1 here is VNC Session ID
+     */
     @Override
-    public VagrantBoxSession provision(String owner, String boxName, int ram) {
-        return null;
+    public VagrantBoxSession provision(String owner, String boxName, int memory) throws Exception {
+        VagrantSubInfo vagrantSubInfo = getAvailableVagrantSubFolder();
+
+        if (vagrantSubInfo == null) {
+            throw new UnavailableVagrantServerException();
+        }
+
+        // Calculate important ports: SSH & VNC
+        int id = vagrantSubInfo.getVagrantId();
+        int vagrantSSHPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 22;
+        int vagrantVncPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 1;
+
+        // At present we are hardcoding the fix value of RAM, Box Type, Box Name in the Vagrantfile placed under
+        // /vagrant
+        String sessionId = UUID.randomUUID().toString();
+
+        // Calculate new password basing on sessionId
+        StringBuilder vagrantSSHPass = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            vagrantSSHPass.append(sessionId.charAt(i));
+        }
+
+        VagrantBoxSession session = VagrantBoxSession.builder().sessionId(sessionId).boxName(boxName).memory(memory)
+                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(vagrantSubInfo.getVagrantServer()
+                        .getServerIp())
+                .vagrantSubFolder(vagrantSubInfo.getVagrantSubFolder())
+                .build();
+        log.info("Provisioning session " + sessionId);
+        log.debug("    " + session);
+        // Save to database
+        repository.save(session);
+
+        // variable for SSH executing
+        String host = vagrantSubInfo.getVagrantServer().getServerIp();
+        int serverSSHPort = vagrantSubInfo.getVagrantServer().getPort();
+        String userName = vagrantSubInfo.getVagrantServer().getUserName();
+        String password = vagrantSubInfo.getVagrantServer().getPassword();
+
+        String vagrantUser = "vagrant";
+
+        // Start Vagrant Session on Server
+        new VagrantUpCommand(session.getVagrantSubFolder(), session.getSessionId()).execute(executor, host,
+                serverSSHPort, userName, password); // Usually is 22
+        // Change Vagrant box password on Vagrant Box Session
+        new ChangePasswordCommand(vagrantUser, vagrantSSHPass.toString()).execute(executor, host, vagrantSSHPort,
+                vagrantUser, vagrantUser); // By default username & password is vagrant so we need to change password
+        // Change VNC password on Vagrant Box Session
+        new ChangeVNCPasswordCommand(vagrantSSHPass.toString()).execute(executor, host, vagrantSSHPort,
+                vagrantUser, vagrantSSHPass.toString());
+        // Start VNC on Vagrant Box Session
+        new StartVNCCommand(1).execute(executor, host, vagrantSSHPort,
+                vagrantUser, vagrantSSHPass.toString());
+
+        return session;
+    }
+
+    @Builder
+    @Getter
+    @Setter
+    @Data
+    private static class VagrantSubInfo {
+        private VagrantServer vagrantServer;
+        private String vagrantSubFolder;
+        private Integer vagrantId;
     }
 
     @Override
     public void destroy(String sessionId) {
 
     }
+
+    /**
+     * @return Entry<Vagrant Sub Folder, Vagrant ID>: for example
+     * + Vagrant Sub Folder: <Vagrant Root Folder>/user1, <Vagrant Root Folder>/user2
+     * + Vagrant ID: 1, 2, 3... This number will be used to calculate port mapping
+     */
+    private VagrantSubInfo getAvailableVagrantSubFolder() {
+        List<VagrantServer> vagrantServers = vagrantServerService.getAvailableVagrantServer();
+        if (vagrantServers == null || vagrantServers.isEmpty()) {
+            throw new UnavailableVagrantServerException();
+        }
+        VagrantSubInfo vagrantSubInfo = null;
+
+        for (VagrantServer vagrantServer : vagrantServers) {
+            Set<VagrantBoxSession> runningSessions = vagrantBoxByServerIp.get(vagrantServer.getServerIp());
+
+            // There is no Vagrant Session running => get any
+            if (runningSessions == null || runningSessions.isEmpty()) {
+                Map.Entry<String, Integer> runningSession = vagrantServer.getVagrantSubFolder().entrySet().iterator()
+                        .next();
+                vagrantSubInfo = VagrantSubInfo.builder().vagrantServer(vagrantServer)
+                        .vagrantSubFolder(runningSession.getKey()).vagrantId(runningSession.getValue()).build();
+                break;
+            }
+
+            // There are some Vagrant session running => get the new one
+            // Build up running set for fast checking
+            Set<String> vagrantSubRunning = new HashSet<>();
+            runningSessions.forEach(runningSession -> {
+                vagrantSubRunning.add(runningSession.getVagrantSubFolder());
+            });
+
+            for (Map.Entry<String, Integer> entry : vagrantServer.getVagrantSubFolder().entrySet()) {
+                String vagrantSubFolder = entry.getKey();
+                Integer vagrantId = entry.getValue();
+
+                if (!vagrantSubRunning.contains(vagrantSubFolder)) {
+                    // This vagrant sub session is not provisioned -> add to Entry for starting
+                    vagrantSubInfo = VagrantSubInfo.builder().vagrantServer(vagrantServer)
+                            .vagrantSubFolder(vagrantSubFolder).vagrantId(vagrantId).build();
+                    break;
+                }
+            }
+
+        }
+        return vagrantSubInfo;
+    }
+
+    private void addVagrantSessionToServerIpMap(VagrantBoxSession vagrantSession) {
+        Set<VagrantBoxSession> sessions = vagrantBoxByServerIp.get(vagrantSession.getServerIp());
+        if (sessions == null) {
+            sessions = new HashSet<>();
+            vagrantBoxByServerIp.put(vagrantSession.getServerIp(), sessions);
+        }
+        sessions.add(vagrantSession);
+    }
+
 }

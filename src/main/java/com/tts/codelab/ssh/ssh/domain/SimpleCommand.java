@@ -1,7 +1,7 @@
 package com.tts.codelab.ssh.ssh.domain;
 
 
-import com.tts.codelab.ssh.domain.SSHServer;
+import com.tts.codelab.ssh.domain.VagrantServer;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
 
 public class SimpleCommand extends AbstractCommand implements UICommand{
@@ -24,8 +24,8 @@ public class SimpleCommand extends AbstractCommand implements UICommand{
     }
 
     @Override
-    public SSHResult execute(SSHCommandExecutor executor, SSHServer server) throws Exception {
-        return executor.execute(server.getServerIp(), server.getUserName(), server.getPassword(), this);
+    public SSHResult execute(SSHCommandExecutor executor, String host, int port, String userName, String password) throws Exception {
+        return executor.execute(host, port, userName, password, this);
     }
 
     @Override

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 public class VncServiceImpl implements VncService {
 
     @Autowired
-    private SSHServerService sshServerService;
+    private VagrantServerService sshServerService;
 
     @Autowired
     private VncSessionRepository repository;

@@ -20,7 +20,7 @@ import java.util.Map;
  *          + /vagrant/user1
  *          + /vagrant/user2
  */
-public class SSHServer {
+public class VagrantServer {
 
     private String serverIp;
 
