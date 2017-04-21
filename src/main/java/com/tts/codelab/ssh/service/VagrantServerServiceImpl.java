@@ -22,7 +22,7 @@ public class VagrantServerServiceImpl implements VagrantServerService {
     @Value("${codelab.config.servers}")
     private List<String> sshServerConfigurations;
 
-    private Set<VagrantServer> vagrantServers = new HashSet<>();
+    private Map<String, VagrantServer> vagrantServersByIp = new HashMap<>();
 
     @Autowired
     private SSHCommandExecutor sshCommandExecutor;
@@ -44,19 +44,20 @@ public class VagrantServerServiceImpl implements VagrantServerService {
                     vagrantSubMap.put(arr[0], Integer.valueOf(arr[1]));
                 });
 
-                vagrantServers.add(VagrantServer.builder().serverIp(serverIp).port(Integer.valueOf(port)).userName(userName)
-                        .password(password).vagrantRootFolder(vagrantRoot).vagrantSubFolder(vagrantSubMap).build());
+                vagrantServersByIp.put(serverIp, VagrantServer.builder().serverIp(serverIp).port(Integer.valueOf(port))
+                        .userName(userName).password(password).vagrantRootFolder(vagrantRoot)
+                        .vagrantSubFolder(vagrantSubMap).build());
             });
         }
     }
 
     @Override
-    public List<VagrantServer> getAvailableVagrantServer() {
-        return null;
+    public Collection<VagrantServer> getVagrantServers() {
+        return vagrantServersByIp.values();
     }
 
     @Override
     public VagrantServer getVagrantServer(String serverIp) {
-        return null;
+        return vagrantServersByIp.get(serverIp);
     }
 }

@@ -132,6 +132,10 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         }
 
         VagrantServer vagrantServer = vagrantServerService.getVagrantServer(session.getServerIp());
+        if (vagrantServer == null) {
+            return;
+        }
+
         // variable for SSH executing
         String host = vagrantServer.getServerIp();
         int serverSSHPort = vagrantServer.getPort();
@@ -165,7 +169,7 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
      * + Vagrant ID: 1, 2, 3... This number will be used to calculate port mapping
      */
     private VagrantSubInfo getAvailableVagrantSubFolder() {
-        List<VagrantServer> vagrantServers = vagrantServerService.getAvailableVagrantServer();
+        Collection<VagrantServer> vagrantServers = vagrantServerService.getVagrantServers();
         if (vagrantServers == null || vagrantServers.isEmpty()) {
             throw new UnavailableVagrantServerException();
         }
