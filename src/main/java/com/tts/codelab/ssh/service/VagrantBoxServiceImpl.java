@@ -92,6 +92,11 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
                         .getServerIp())
                 .vagrantSubFolder(vagrantSubInfo.getVagrantSubFolder())
                 .build();
+
+        // Put to map
+        vagrantBoxBySessionId.put(sessionId, session);
+        addVagrantSessionToServerIpMap(session);
+
         log.info("Provisioning session " + sessionId);
         log.debug("    " + session);
         // Save to database
@@ -121,6 +126,11 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         return session;
     }
 
+    @Override
+    public void destroy(String sessionId) {
+
+    }
+
     @Builder
     @Getter
     @Setter
@@ -129,11 +139,6 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         private VagrantServer vagrantServer;
         private String vagrantSubFolder;
         private Integer vagrantId;
-    }
-
-    @Override
-    public void destroy(String sessionId) {
-
     }
 
     /**
