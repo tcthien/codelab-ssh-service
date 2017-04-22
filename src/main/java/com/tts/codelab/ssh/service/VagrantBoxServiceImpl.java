@@ -51,13 +51,9 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     // Schedule task every 5mins to check & clean up vagrant box session
     @Scheduled(fixedDelay = 300000)
     public void cleanVagrantBoxSession() {
-        List<VagrantBoxSession> lst = new ArrayList<>();
-        synchronized (lock){
-            // Synchronize to make sure the consistency in multi thread context
-            lst.addAll(vagrantBoxBySessionId.values());
-        }
+        Set<VagrantBoxSession> sessions = getRunningVagrantBoxSession();
         // Do in parallel for better better performance
-        lst.parallelStream().forEach(session -> {
+        sessions.parallelStream().forEach(session -> {
             Date startTime = session.getProvisionTime();
             Date stopTime = new Date(startTime.getTime());
             stopTime.setMinutes(startTime.getMinutes() + 30); // Stop after 30mins provisioning
@@ -90,7 +86,8 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         log.info("Provisioning: {" + boxName + ", " + memory + " MB, " + owner + "}");
         try{
             // Check if user already provision a vagrant box session -------------------------------------------------
-            for (VagrantBoxSession session : vagrantBoxBySessionId.values()) {
+            Set<VagrantBoxSession> sessions = getRunningVagrantBoxSession();
+            for (VagrantBoxSession session : sessions) {
                 if (owner.equals(session.getOwner())) {
                     return session;
                 }
@@ -104,23 +101,36 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     }
 
     private VagrantBoxSession provisionNewVagrantBoxSession(String owner, String boxName, int memory) throws Exception {
-        VagrantSubInfo vagrantSubInfo = getAvailableVagrantSubFolder();
-
-        String vagrantSubFolder = vagrantSubInfo.getVagrantSubFolder();
-        String serverIp = vagrantSubInfo.getServerIp();
-
-        if (vagrantSubInfo == null) {
-            throw new UnavailableVagrantServerException();
-        }
-
-        // Calculate important ports: SSH & VNC
-        int id = vagrantSubInfo.getVagrantId();
-        int vagrantSSHPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 22;
-        int vagrantVncPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 1;
-
         // At present we are hardcoding the fix value of RAM, Box Type, Box Name in the Vagrantfile placed under
         // /vagrant
         String sessionId = UUID.randomUUID().toString();
+        VagrantBoxSession session = null;
+
+        int vagrantSSHPort = 0;
+        int vagrantVncPort = 0;
+
+        // Reserve a vagrant box session
+        VagrantSubInfo vagrantSubInfo = null;
+        synchronized (lock){
+            vagrantSubInfo = getAvailableVagrantSubFolder();
+            if (vagrantSubInfo == null) {
+                throw new UnavailableVagrantServerException();
+            }
+
+            // Calculate important ports: SSH & VNC
+            int id = vagrantSubInfo.getVagrantId();
+            vagrantSSHPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 22;
+            vagrantVncPort = VAGRANT_BOX_BASE_PORT + (id * 100) + 1;
+
+            session = VagrantBoxSession.builder().sessionId(sessionId).boxName(boxName).memory(memory)
+                    .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(vagrantSubInfo.getServerIp())
+                    .vagrantSubFolder(vagrantSubInfo.getVagrantSubFolder()).build();
+            // Put to map
+            vagrantBoxBySessionId.put(sessionId, session);
+        }
+
+        String serverIp = vagrantSubInfo.getServerIp();
+        String vagrantSubFolder = vagrantSubInfo.getVagrantSubFolder();
 
         // Calculate new password basing on sessionId
         StringBuilder vagrantSSHPass = new StringBuilder();
@@ -128,14 +138,8 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             vagrantSSHPass.append(sessionId.charAt(i));
         }
 
-        VagrantBoxSession session = VagrantBoxSession.builder().sessionId(sessionId).boxName(boxName).memory(memory)
-                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(serverIp)
-                .vagrantSubFolder(vagrantSubFolder).build();
-
         log.info("Provisioning session " + sessionId);
         log.debug("    " + session);
-        // Put to map
-        vagrantBoxBySessionId.put(sessionId, session);
         // Save to database
         repository.save(session);
 
@@ -148,6 +152,7 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
 
         String vagrantUser = "vagrant";
 
+        // TODO: Should introduce async command handler for better performance
         // Start Vagrant Session on Server
         new VagrantUpCommand(session.getVagrantSubFolder(), session.getSessionId()).execute(executor, host,
                 serverSSHPort, userName, password); // Usually is 22
@@ -167,34 +172,40 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     public void destroy(String sessionId) throws Exception {
         log.info("Destroying: {" + sessionId + "}");
         try{
-            VagrantBoxSession session = vagrantBoxBySessionId.get(sessionId);
-            if (session == null) {
-                return;
-            }
-
-            VagrantServer vagrantServer = vagrantServerService.getVagrantServer(session.getServerIp());
-            if (vagrantServer == null) {
-                return;
-            }
-
-            // variable for SSH executing
-            String host = vagrantServer.getServerIp();
-            int serverSSHPort = vagrantServer.getPort();
-            String userName = vagrantServer.getUserName();
-            String password = vagrantServer.getPassword();
-
-            try {
-                // Start Vagrant Session on Server
-                new VagrantDestroyCommand(session.getVagrantSubFolder()).execute(executor,
-                        host, serverSSHPort, userName, password); // Usually is 22
-            } finally {
-                // Remove out of the map
-                vagrantBoxBySessionId.remove(sessionId);
-                // Delete in database
-                repository.delete(sessionId);
+            synchronized (sessionId){
+                destroyVagrantBoxSession(vagrantBoxBySessionId.get(sessionId));
             }
         } finally {
             log.info("Destroying: {" + sessionId + "} completed");
+        }
+    }
+
+    private void destroyVagrantBoxSession(VagrantBoxSession session) throws Exception {
+        if (session == null) {
+            return;
+        }
+
+        VagrantServer vagrantServer = vagrantServerService.getVagrantServer(session.getServerIp());
+        if (vagrantServer == null) {
+            return;
+        }
+
+        // variable for SSH executing
+        String host = vagrantServer.getServerIp();
+        int serverSSHPort = vagrantServer.getPort();
+        String userName = vagrantServer.getUserName();
+        String password = vagrantServer.getPassword();
+
+        try {
+            // Start Vagrant Session on Server
+            // TODO: Should introduce async command handler for better performance
+            new VagrantDestroyCommand(session.getVagrantSubFolder()).execute(executor,
+                    host, serverSSHPort, userName, password); // Usually is 22
+        } finally {
+            // Remove out of the map
+            vagrantBoxBySessionId.remove(session.getSessionId());
+            // Delete in database
+            repository.delete(session.getSessionId());
         }
     }
 
@@ -254,20 +265,14 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             String serverIp = vagrantServer.getServerIp();
 
             // TODO: Should consider to cache running session by server ip to improve performance
-            Set<VagrantBoxSession> runningSessions = new HashSet<>();
-            vagrantBoxBySessionId.values().forEach(session -> {
-                if (serverIp.equalsIgnoreCase(session.getServerIp())) {
-                    runningSessions.add(session);
-                }
-            });
+            Set<VagrantBoxSession> runningSessions = getRunningVagrantBoxSession();
 
             // There is no Vagrant Session running => get any
             if (runningSessions == null || runningSessions.isEmpty()) {
                 if (counter != null) {
                     counter.increase(vagrantSubFolders.size());
                 } else {
-                    Map.Entry<String, Integer> runningSession = vagrantSubFolders.entrySet().iterator()
-                            .next();
+                    Map.Entry<String, Integer> runningSession = vagrantSubFolders.entrySet().iterator().next();
                     vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
                             .vagrantSubFolder(runningSession.getKey()).vagrantId(runningSession.getValue()).build();
                     break;
@@ -299,5 +304,9 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
 
         }
         return vagrantSubInfo;
+    }
+
+    private Set<VagrantBoxSession> getRunningVagrantBoxSession() {
+        return (Set<VagrantBoxSession>) new HashSet<>(vagrantBoxBySessionId.values());
     }
 }
