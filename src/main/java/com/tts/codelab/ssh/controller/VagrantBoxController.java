@@ -14,7 +14,7 @@ import java.security.Principal;
 
 @RestController
 @RequestMapping("/box")
-public class BoxController {
+public class VagrantBoxController {
 
     @Autowired
     private VagrantBoxService vagrantBoxService;
@@ -46,9 +46,9 @@ public class BoxController {
         return convertToUserVncSession(vagrantBoxService.getVagrantBoxSession(sessionId));
     }
 
-//    @RequestMapping(path = "/", method = RequestMethod.GET)
-//    public VncSessionSummary getVncSummary(Principal principal) {
-//        return vncService.findSummary();
-//    }
+    @RequestMapping(path = "/", method = RequestMethod.GET)
+    public VncSessionSummary getVncSummary(Principal principal) {
+        return vagrantBoxService.getVagrantBoxSummary();
+    }
 
 }

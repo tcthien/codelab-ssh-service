@@ -1,6 +1,7 @@
 package com.tts.codelab.ssh.service;
 
 import com.tts.codelab.ssh.domain.VagrantBoxSession;
+import com.tts.codelab.ssh.domain.VncSessionSummary;
 import com.tts.codelab.ssh.exception.UnavailableVagrantServerException;
 
 /**
@@ -12,4 +13,6 @@ public interface VagrantBoxService {
     public void destroy(String sessionId) throws Exception;
 
     VagrantBoxSession getVagrantBoxSession(String sessionId);
+
+    VncSessionSummary getVagrantBoxSummary();
 }

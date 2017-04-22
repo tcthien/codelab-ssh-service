@@ -2,6 +2,7 @@ package com.tts.codelab.ssh.service;
 
 import com.tts.codelab.ssh.domain.VagrantBoxSession;
 import com.tts.codelab.ssh.domain.VagrantServer;
+import com.tts.codelab.ssh.domain.VncSessionSummary;
 import com.tts.codelab.ssh.exception.UnavailableVagrantServerException;
 import com.tts.codelab.ssh.repository.VagrantBoxSessionRepository;
 import com.tts.codelab.ssh.ssh.execute.SSHCommandExecutor;
@@ -158,6 +159,14 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         return vagrantBoxBySessionId.get(sessionId);
     }
 
+    @Override
+    public VncSessionSummary getVagrantBoxSummary() {
+        int runningSession = vagrantBoxBySessionId.size();
+        int availableSession = getNumberOfAvailableVagrantSession();
+        return VncSessionSummary.builder().numberOfAvailableSession(availableSession).numberOfRunningSession
+                (runningSession).build();
+    }
+
     @Builder
     @Getter
     @Setter
@@ -168,12 +177,28 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         private Integer vagrantId;
     }
 
+    private static interface AvailableSessionCounter {
+        void increase(int count);
+    }
+
+    private int getNumberOfAvailableVagrantSession() {
+        int[] counter = new int[]{0};
+        getAvailableVagrantSubFolder(count -> {
+            counter[0] += count;
+        });
+        return counter[0];
+    }
+
+    private VagrantSubInfo getAvailableVagrantSubFolder() {
+        return getAvailableVagrantSubFolder(null);
+    }
+
     /**
      * @return Entry<Vagrant Sub Folder, Vagrant ID>: for example
      * + Vagrant Sub Folder: <Vagrant Root Folder>/user1, <Vagrant Root Folder>/user2
      * + Vagrant ID: 1, 2, 3... This number will be used to calculate port mapping
      */
-    private VagrantSubInfo getAvailableVagrantSubFolder() {
+    private VagrantSubInfo getAvailableVagrantSubFolder(AvailableSessionCounter counter) {
         Collection<VagrantServer> vagrantServers = vagrantServerService.getVagrantServers();
         if (vagrantServers == null || vagrantServers.isEmpty()) {
             throw new UnavailableVagrantServerException();
@@ -188,11 +213,15 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
 
             // There is no Vagrant Session running => get any
             if (runningSessions == null || runningSessions.isEmpty()) {
-                Map.Entry<String, Integer> runningSession = vagrantSubFolders.entrySet().iterator()
-                        .next();
-                vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
-                        .vagrantSubFolder(runningSession.getKey()).vagrantId(runningSession.getValue()).build();
-                break;
+                if (counter != null) {
+                    counter.increase(vagrantSubFolders.size());
+                } else {
+                    Map.Entry<String, Integer> runningSession = vagrantSubFolders.entrySet().iterator()
+                            .next();
+                    vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
+                            .vagrantSubFolder(runningSession.getKey()).vagrantId(runningSession.getValue()).build();
+                    break;
+                }
             }
 
             // There are some Vagrant session running => get the new one
@@ -207,10 +236,14 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
                 Integer vagrantId = entry.getValue();
 
                 if (!vagrantSubRunning.contains(vagrantSubFolder)) {
-                    // This vagrant sub session is not provisioned -> add to Entry for starting
-                    vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
-                            .vagrantSubFolder(vagrantSubFolder).vagrantId(vagrantId).build();
-                    break;
+                    if (counter != null) {
+                        counter.increase(1);
+                    } else {
+                        // This vagrant sub session is not provisioned -> add to Entry for starting
+                        vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
+                                .vagrantSubFolder(vagrantSubFolder).vagrantId(vagrantId).build();
+                        break;
+                    }
                 }
             }
 

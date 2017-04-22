@@ -15,7 +15,5 @@ public class VncSessionSummary {
 
     private int numberOfRunningSession;
 
-    private int numberOfInactiveSession;
-
     private int numberOfAvailableSession;
 }
