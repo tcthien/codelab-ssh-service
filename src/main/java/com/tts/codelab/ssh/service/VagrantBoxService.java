@@ -10,4 +10,6 @@ public interface VagrantBoxService {
     public VagrantBoxSession provision(String owner, String boxName, int ram) throws Exception;
 
     public void destroy(String sessionId) throws Exception;
+
+    VagrantBoxSession getVagrantBoxSession(String sessionId);
 }

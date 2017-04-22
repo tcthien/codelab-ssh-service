@@ -42,7 +42,7 @@ public class VagrantBoxSession {
     private String owner; // Who is owner of this vagrant box session
 
     @Builder.Default
-    private Date provisionDate = new Date();
+    private Date provisionTime = new Date();
 
     @NotNull
     private String serverIp;

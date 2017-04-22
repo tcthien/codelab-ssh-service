@@ -65,6 +65,9 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     public VagrantBoxSession provision(String owner, String boxName, int memory) throws Exception {
         VagrantSubInfo vagrantSubInfo = getAvailableVagrantSubFolder();
 
+        String vagrantSubFolder = vagrantSubInfo.getVagrantSubFolder();
+        String serverIp = vagrantSubInfo.getServerIp();
+
         if (vagrantSubInfo == null) {
             throw new UnavailableVagrantServerException();
         }
@@ -84,13 +87,9 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             vagrantSSHPass.append(sessionId.charAt(i));
         }
 
-        VagrantServer vagrantServer = vagrantSubInfo.getVagrantServer();
         VagrantBoxSession session = VagrantBoxSession.builder().sessionId(sessionId).boxName(boxName).memory(memory)
-                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(vagrantServer
-                        .getServerIp())
-                .vagrantSubFolder(vagrantSubInfo.getVagrantSubFolder())
-                .build();
-
+                .sshPort(vagrantSSHPort).vncPort(vagrantVncPort).owner(owner).serverIp(serverIp)
+                .vagrantSubFolder(vagrantSubFolder).build();
 
         log.info("Provisioning session " + sessionId);
         log.debug("    " + session);
@@ -100,8 +99,9 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         // Save to database
         repository.save(session);
 
+        VagrantServer vagrantServer = vagrantServerService.getVagrantServer(serverIp);
         // variable for SSH executing
-        String host = vagrantServer.getServerIp();
+        String host = serverIp;
         int serverSSHPort = vagrantServer.getPort();
         String userName = vagrantServer.getUserName();
         String password = vagrantServer.getPassword();
@@ -153,12 +153,17 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         repository.delete(sessionId);
     }
 
+    @Override
+    public VagrantBoxSession getVagrantBoxSession(String sessionId) {
+        return vagrantBoxBySessionId.get(sessionId);
+    }
+
     @Builder
     @Getter
     @Setter
     @Data
     private static class VagrantSubInfo {
-        private VagrantServer vagrantServer;
+        private String serverIp;
         private String vagrantSubFolder;
         private Integer vagrantId;
     }
@@ -176,13 +181,16 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         VagrantSubInfo vagrantSubInfo = null;
 
         for (VagrantServer vagrantServer : vagrantServers) {
-            Set<VagrantBoxSession> runningSessions = vagrantBoxByServerIp.get(vagrantServer.getServerIp());
+            Map<String, Integer> vagrantSubFolders = vagrantServer.getVagrantSubFolder();
+            String serverIp = vagrantServer.getServerIp();
+
+            Set<VagrantBoxSession> runningSessions = vagrantBoxByServerIp.get(serverIp);
 
             // There is no Vagrant Session running => get any
             if (runningSessions == null || runningSessions.isEmpty()) {
-                Map.Entry<String, Integer> runningSession = vagrantServer.getVagrantSubFolder().entrySet().iterator()
+                Map.Entry<String, Integer> runningSession = vagrantSubFolders.entrySet().iterator()
                         .next();
-                vagrantSubInfo = VagrantSubInfo.builder().vagrantServer(vagrantServer)
+                vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
                         .vagrantSubFolder(runningSession.getKey()).vagrantId(runningSession.getValue()).build();
                 break;
             }
@@ -194,13 +202,13 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
                 vagrantSubRunning.add(runningSession.getVagrantSubFolder());
             });
 
-            for (Map.Entry<String, Integer> entry : vagrantServer.getVagrantSubFolder().entrySet()) {
+            for (Map.Entry<String, Integer> entry : vagrantSubFolders.entrySet()) {
                 String vagrantSubFolder = entry.getKey();
                 Integer vagrantId = entry.getValue();
 
                 if (!vagrantSubRunning.contains(vagrantSubFolder)) {
                     // This vagrant sub session is not provisioned -> add to Entry for starting
-                    vagrantSubInfo = VagrantSubInfo.builder().vagrantServer(vagrantServer)
+                    vagrantSubInfo = VagrantSubInfo.builder().serverIp(serverIp)
                             .vagrantSubFolder(vagrantSubFolder).vagrantId(vagrantId).build();
                     break;
                 }
