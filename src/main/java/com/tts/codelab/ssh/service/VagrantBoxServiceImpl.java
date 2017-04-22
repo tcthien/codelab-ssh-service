@@ -64,6 +64,18 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
      */
     @Override
     public VagrantBoxSession provision(String owner, String boxName, int memory) throws Exception {
+        // Check if user already provision a vagrant box session -------------------------------------------------
+        for (VagrantBoxSession session : vagrantBoxBySessionId.values()) {
+            if (owner.equals(session.getOwner())) {
+                return session;
+            }
+        }
+
+        // Provision a new Vagrant Box Session -------------------------------------------------------------------
+        return provisionNewVagrantBoxSession(owner, boxName, memory);
+    }
+
+    private VagrantBoxSession provisionNewVagrantBoxSession(String owner, String boxName, int memory) throws Exception {
         VagrantSubInfo vagrantSubInfo = getAvailableVagrantSubFolder();
 
         String vagrantSubFolder = vagrantSubInfo.getVagrantSubFolder();
@@ -121,7 +133,6 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         // Start VNC on Vagrant Box Session
         new StartVNCCommand(1).execute(executor, host, vagrantSSHPort,
                 vagrantUser, vagrantSSHPass.toString());
-
         return session;
     }
 
@@ -143,15 +154,17 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         String userName = vagrantServer.getUserName();
         String password = vagrantServer.getPassword();
 
-        // Start Vagrant Session on Server
-        new VagrantDestroyCommand(session.getVagrantSubFolder()).execute(executor,
-                host, serverSSHPort, userName, password); // Usually is 22
-
-        // Remove out of the map
-        vagrantBoxBySessionId.remove(sessionId);
-        removeVagrantSessionToServerIpMap(host, sessionId);
-        // Delete in database
-        repository.delete(sessionId);
+        try{
+            // Start Vagrant Session on Server
+            new VagrantDestroyCommand(session.getVagrantSubFolder()).execute(executor,
+                    host, serverSSHPort, userName, password); // Usually is 22
+        } finally {
+            // Remove out of the map
+            vagrantBoxBySessionId.remove(sessionId);
+            removeVagrantSessionToServerIpMap(host, sessionId);
+            // Delete in database
+            repository.delete(sessionId);
+        }
     }
 
     @Override

@@ -26,15 +26,6 @@ public class VagrantBoxController {
 
     }
 
-    private UserVncSession convertToUserVncSession(VagrantBoxSession session) {
-        // Convert to UserVncSession to suppress some important information
-        if (session == null) {
-            return UserVncSession.builder().build();
-        }
-        return UserVncSession.builder().sessionId(session.getSessionId()).userName(session.getOwner())
-                .upTime(session.getProvisionTime()).build();
-    }
-
     @RequestMapping(path = "/{sessionId}", method = RequestMethod.DELETE)
     public void destroyVagrantBox(Principal principal, @PathVariable String sessionId) throws Exception {
         vagrantBoxService.destroy(sessionId);
@@ -51,4 +42,12 @@ public class VagrantBoxController {
         return vagrantBoxService.getVagrantBoxSummary();
     }
 
+    private UserVncSession convertToUserVncSession(VagrantBoxSession session) {
+        // Convert to UserVncSession to suppress some important information
+        if (session == null) {
+            return UserVncSession.builder().build();
+        }
+        return UserVncSession.builder().sessionId(session.getSessionId()).userName(session.getOwner())
+                .upTime(session.getProvisionTime()).build();
+    }
 }
