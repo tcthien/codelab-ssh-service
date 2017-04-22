@@ -253,6 +253,7 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             Map<String, Integer> vagrantSubFolders = vagrantServer.getVagrantSubFolder();
             String serverIp = vagrantServer.getServerIp();
 
+            // TODO: Should consider to cache running session by server ip to improve performance
             Set<VagrantBoxSession> runningSessions = new HashSet<>();
             vagrantBoxBySessionId.values().forEach(session -> {
                 if (serverIp.equalsIgnoreCase(session.getServerIp())) {
