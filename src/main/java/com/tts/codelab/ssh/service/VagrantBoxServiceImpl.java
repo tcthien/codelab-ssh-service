@@ -37,8 +37,7 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
     // Map<Session ID, Vagrant Box Session>
     private Map<String, VagrantBoxSession> vagrantBoxBySessionId = new ConcurrentHashMap<>();
 
-    // Map<Server IP, Vagrant Box Session>
-    private Map<String, Set<VagrantBoxSession>> vagrantBoxByServerIp = new ConcurrentHashMap<>();
+    private Object lock = new Object();
 
     @PostConstruct
     public void initialize() {
@@ -46,23 +45,28 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         //      we reboot application but vagrant box sessions are still there.
         repository.findAll().forEach(vagrantSession -> {
             vagrantBoxBySessionId.put(vagrantSession.getSessionId(), vagrantSession);
-            addVagrantSessionToServerIpMap(vagrantSession);
         });
     }
 
     // Schedule task every 5mins to check & clean up vagrant box session
     @Scheduled(fixedDelay = 300000)
     public void cleanVagrantBoxSession() {
-        vagrantBoxBySessionId.forEach((sessionId, session) -> {
+        List<VagrantBoxSession> lst = new ArrayList<>();
+        synchronized (lock){
+            // Synchronize to make sure the consistency in multi thread context
+            lst.addAll(vagrantBoxBySessionId.values());
+        }
+        // Do in parallel for better better performance
+        lst.parallelStream().forEach(session -> {
             Date startTime = session.getProvisionTime();
             Date stopTime = new Date(startTime.getTime());
             stopTime.setMinutes(startTime.getMinutes() + 30); // Stop after 30mins provisioning
             Date currentTime = new Date();
             if (currentTime.after(stopTime)) {
                 try {
-                    destroy(sessionId);
+                    destroy(session.getSessionId());
                 } catch (Exception e) {
-                    log.error("Failed to destroy " + sessionId, e);
+                    log.error("Failed to destroy " + session.getSessionId(), e);
                 }
             }
         });
@@ -132,7 +136,6 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         log.debug("    " + session);
         // Put to map
         vagrantBoxBySessionId.put(sessionId, session);
-        addVagrantSessionToServerIpMap(session);
         // Save to database
         repository.save(session);
 
@@ -187,7 +190,6 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             } finally {
                 // Remove out of the map
                 vagrantBoxBySessionId.remove(sessionId);
-                removeVagrantSessionToServerIpMap(host, sessionId);
                 // Delete in database
                 repository.delete(sessionId);
             }
@@ -251,7 +253,12 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
             Map<String, Integer> vagrantSubFolders = vagrantServer.getVagrantSubFolder();
             String serverIp = vagrantServer.getServerIp();
 
-            Set<VagrantBoxSession> runningSessions = vagrantBoxByServerIp.get(serverIp);
+            Set<VagrantBoxSession> runningSessions = new HashSet<>();
+            vagrantBoxBySessionId.values().forEach(session -> {
+                if (serverIp.equalsIgnoreCase(session.getServerIp())) {
+                    runningSessions.add(session);
+                }
+            });
 
             // There is no Vagrant Session running => get any
             if (runningSessions == null || runningSessions.isEmpty()) {
@@ -292,29 +299,4 @@ public class VagrantBoxServiceImpl implements VagrantBoxService {
         }
         return vagrantSubInfo;
     }
-
-    private void removeVagrantSessionToServerIpMap(String serverIp, String sessionId) {
-        Set<VagrantBoxSession> sessions = vagrantBoxByServerIp.get(serverIp);
-        if (sessions == null || sessions.isEmpty()) {
-            return;
-        }
-        Iterator<VagrantBoxSession> iter = sessions.iterator();
-        while (iter.hasNext()) {
-            VagrantBoxSession session = iter.next();
-            if (sessionId.equals(session.getSessionId())) {
-                iter.remove();
-                break;
-            }
-        }
-    }
-
-    private void addVagrantSessionToServerIpMap(VagrantBoxSession vagrantSession) {
-        Set<VagrantBoxSession> sessions = vagrantBoxByServerIp.get(vagrantSession.getServerIp());
-        if (sessions == null) {
-            sessions = new HashSet<>();
-            vagrantBoxByServerIp.put(vagrantSession.getServerIp(), sessions);
-        }
-        sessions.add(vagrantSession);
-    }
-
 }
